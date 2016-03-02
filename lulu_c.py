@@ -99,6 +99,7 @@ void lulu_init(Pcolony_t *pcol) {""" % path)
 
         for ag_name in pcol.B:
             fout.write("""\n\n    //init agent %s""" % ag_name)
+            fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), len(pcol.agents[ag_name].programs)))
 
             fout.write("""\n        //init obj multiset""")
             counter = 0;
