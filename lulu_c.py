@@ -100,7 +100,7 @@ void lulu_init(Pcolony_t *pcol) {""" % path)
             for obj, nr in pcol.parentSwarm.global_env.items():
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
-            counter += 1
+                counter += 1
         fout.write("""\n    //end init global pswarm environment""")
 
         for ag_name in pcol.B:
