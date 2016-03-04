@@ -47,8 +47,8 @@ def createInstanceHeader(pcol, path):
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
-    extern char **objectNames;
-    extern char **agentNames;
+    extern char* objectNames[];
+    extern char* agentNames[];
 #endif""");
 
         fout.write("""\n\n/**
@@ -83,44 +83,25 @@ def createInstanceSource(pcol, path):
     with open(path + ".c", "w") as fout:
         fout.write("""#include "%s.h"
 #include <malloc.h>
-#ifdef PCOL_SIM
-    #include <string.h>
+#ifdef PCOL_SIM""" % path)
 
-    char **objectNames;
-    char **agentNames;
+        fout.write("""\n    char* objectNames[] = {[NO_OBJECT] = "no_object", """)
+        for obj in pcol.A:
+            fout.write("""[OBJECT_ID_%s] = "%s", """ % (obj.upper(), obj))
+
+        fout.write("""};
+    char* agentNames[] = {""")
+        for ag_name in pcol.B:
+            fout.write("""[AGENT_%s] = "%s", """ % (ag_name.upper(), ag_name))
+        fout.write("""};
 #endif
 
-void lulu_init(Pcolony_t *pcol) {""" % path)
+void lulu_init(Pcolony_t *pcol) {""" )
 
         # call initPcolony()
         fout.write("""\n    //init Pcolony with alphabet size = %d, nr of agents = %d, capacity = %d
     initPcolony(pcol, %d, %d, %d);""" % (len(pcol.A), len(pcol.B), pcol.n,  len(pcol.A), len(pcol.B), pcol.n))
         fout.write("""\n    //Pcolony.alphabet = %s""" % pcol.A)
-
-        # ifdef PCOL_SIM == building a simulator on PC
-        fout.write("""\n\n    #ifdef PCOL_SIM
-        // objectNames_size = (alphabet_size = %d) + 1
-        // because object_id start at 1 not 0
-        objectNames = (char **) malloc(sizeof(char *) * %d);
-        for (uint8_t i = 0; i < %d; i++)
-            //objectNames of 10 chars max
-            objectNames[i] = (char *) malloc(sizeof(char) * 10);
-""" % (len(pcol.A), len(pcol.A) + 1, len(pcol.A) + 1))
-
-        for obj in pcol.A:
-            fout.write("""\n        strcpy(objectNames[OBJECT_ID_%s], "%s");""" % (obj.upper(), obj))
-
-        fout.write("""\n\n    // agentNames_size = nr_agents = %d
-        agentNames = (char **) malloc(sizeof(char *) * %d);
-        for (uint8_t i = 0; i < %d; i++)
-            //agentNames of 20 chars max
-            agentNames[i] = (char *) malloc(sizeof(char) * 20);
-            """ % (len(pcol.B), len(pcol.B), len(pcol.B)))
-
-        for ag_name in pcol.B:
-            fout.write("""\n        strcpy(agentNames[AGENT_%s], "%s");""" % (ag_name.upper(), ag_name))
-
-        fout.write("\n    #endif")
 
         # init environment
         fout.write("""\n\n    //init environment""")
