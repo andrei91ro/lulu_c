@@ -66,6 +66,12 @@ def createInstanceSource(pcol, path):
     :pcol: The pcolony object that was read by lulu_pcol_sim
     :path: The path to the instance.c that will be written"""
 
+    # prevent alphabet related bugs by including e and f objects in alphabet
+    if ("e" not in pcol.A):
+        pcol.A.append("e")
+    if ("f" not in pcol.A):
+        pcol.A.append("f")
+
     with open(path + ".c", "w") as fout:
         fout.write("""#include "%s.h"
 #include <malloc.h>
@@ -75,7 +81,7 @@ void lulu_init(Pcolony_t *pcol) {""" % path)
         # call initPcolony()
         fout.write("""\n    //init Pcolony with alphabet size = %d, nr of agents = %d, capacity = %d
     initPcolony(pcol, %d, %d, %d);""" % (len(pcol.A), len(pcol.B), pcol.n,  len(pcol.A), len(pcol.B), pcol.n))
-
+        fout.write("""\n    //Pcolony.alphabet = %s""" % pcol.A)
         # init environment
         fout.write("""\n\n    //init environment""")
         counter = 0;
