@@ -4,7 +4,7 @@ from lulu_pcol_sim import sim
 import sys # for argv
 import time # for strftime()
 
-def createInstanceHeader(pcol, path):
+def createInstanceHeader(pcol, path, originalFilename):
     """Create an instance of the passed P colony that is written as a header in C at the given path
 
     :pcol: The pcolony object that was read by lulu_pcol_sim
@@ -14,7 +14,7 @@ def createInstanceHeader(pcol, path):
         fout.write("""// vim:filetype=c
 /**
  * @file lulu_instance.h
- * @brief Lulu P colony simulator internal structure.
+ * @brief Lulu P colony simulator internal structure corresponding to the P colony defined in '%s'.
  * In this header we define the structure of the Pcolony that will power the simulated robot
  * This file was generated automatically by lulu_c.py on %s
  * @author Andrei G. Florea
@@ -24,7 +24,7 @@ def createInstanceHeader(pcol, path):
 #ifndef LULU_INSTANCE_H
 #define LULU_INSTANCE_H
 
-#include "lulu.h" """ % time.strftime("%d %h %Y at %H:%M"))
+#include "lulu.h" """ % (originalFilename, time.strftime("%d %h %Y at %H:%M")))
 
         fout.write("\nenum objects {")
         for i, obj in enumerate(pcol.A):
@@ -216,6 +216,6 @@ if (__name__ == "__main__"):
         pcol = pObj
 
     logging.info("Generating the instance header (%s)" % (path + ".h"))
-    createInstanceHeader(pcol, path + ".h")
+    createInstanceHeader(pcol, path + ".h", sys.argv[1].split("/")[-1])
     logging.info("Generating the instance source (%s)" % (path + ".c"))
     createInstanceSource(pcol, path)
