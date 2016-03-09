@@ -89,7 +89,7 @@ def createInstanceSource(pcol, path):
 
     with open(path + ".c", "w") as fout:
         fout.write("""#include "%s.h"
-#include <malloc.h>
+#include <stdlib.h>
 #ifdef PCOL_SIM""" % path.split("/")[-1]) #only filename
 
         fout.write("""\n    char* objectNames[] = {[NO_OBJECT] = "no_object", """)
