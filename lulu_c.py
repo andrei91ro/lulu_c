@@ -44,6 +44,13 @@ def createInstanceHeader(pcol, path, originalFilename):
 
         fout.write("\n};")
 
+        if ("motion" in pcol.B):
+            fout.write("\n#define USING_AGENT_MOTION //this ensures that the code associated with the MOTION agent is included in Lulu_kilobot")
+        if ("led_rgb" in pcol.B):
+            fout.write("\n#define USING_AGENT_LED_RGB //this ensures that the code associated with the LED_RGB agent is included in Lulu_kilobot")
+        if ("msg_distance" in pcol.B):
+            fout.write("\n#define USING_AGENT_MSG_DISTANCE //this ensures that the code associated with the MSG_DISTANCE agent is included in Lulu_kilobot")
+
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
