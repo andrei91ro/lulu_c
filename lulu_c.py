@@ -4,7 +4,7 @@ from lulu_pcol_sim import sim
 import sys # for argv
 import time # for strftime()
 
-def createInstanceHeader(pcol, path, originalFilename):
+def createInstanceHeader(pcol, path, originalFilename, nr_robots):
     """Create an instance of the passed P colony that is written as a header in C at the given path
 
     :pcol: The pcolony object that was read by lulu_pcol_sim
@@ -27,6 +27,20 @@ def createInstanceHeader(pcol, path, originalFilename):
 #include "lulu.h" """ % (originalFilename, time.strftime("%d %h %Y at %H:%M")))
 
         fout.write("\nenum objects {")
+        # extend wildcard objects to _0, _1, ... _n where n = nr_robots
+        for a in pcol.A[:]:
+            # both $ and $id wildcards need extended objects
+            if ("_$" in a or "_$id" in a):
+                logging.debug("Extending %s wildcarded object" % a)
+                # construct extended object list
+                extension = [a.replace("$id", "%d" % i).replace("$", "%d" % i) for i in range(nr_robots)]
+                # if this extension has not been previously added
+                if (not set(extension).issubset(set(pcol.A))):
+                    #add the extetendet object list to the alphabet
+                    pcol.A.extend(extension)
+
+        # sort objects alphabetically
+        pcol.A.sort()
         for i, obj in enumerate(pcol.A):
             if (obj in ['e', 'f']):
                 continue; # they are already defined in lulu.h
@@ -56,6 +70,16 @@ def createInstanceHeader(pcol, path, originalFilename):
     //define array of names for objects and agents for debug
     extern char* objectNames[];
     extern char* agentNames[];
+
+    /**
+     * @brief The smallest kilo_uid from the swarm (is set in instance.c by lulu_c.py)
+     */
+    extern const uint8_t smallest_robot_uid;
+
+    /**
+     * @brief The number of robots that make up the swarm (is set in instance.c by lulu_c.py)
+     */
+    extern const uint8_t nr_swarm_robots;
 #endif""");
 
         fout.write("""\n\n/**
@@ -72,10 +96,20 @@ void lulu_init(Pcolony_t *pcol);
  */
 void lulu_destroy(Pcolony_t *pcol);
 
+/**
+ * @brief Expands and replaces wildcarded objects with the appropriate objects
+ * Objects that end with _$ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
+ *
+ * @param pcol The pcolony where the replacements will take place
+ * @param my_id The kilo_uid of the robot
+ * @return The symbolic id that corresponds to this robot (my_id - smallest_robot_uid)
+ */
+uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id);
+
 #endif""")
 # end createInstanceHeader()
 
-def createInstanceSource(pcol, path):
+def createInstanceSource(pcol, path, nr_robots, smallest_robot_id):
     """Create an instance of the passed P colony that is written as a source file in C at the given path
 
     :pcol: The pcolony object that was read by lulu_pcol_sim
@@ -103,7 +137,12 @@ def createInstanceSource(pcol, path):
         fout.write("""};
 #endif
 
-void lulu_init(Pcolony_t *pcol) {""" )
+//the smallest kilo_uid from the swarm
+const uint8_t smallest_robot_uid = %d;
+//the number of robots that make up the swarm
+const uint8_t nr_swarm_robots = %d;
+
+void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
 
         # call initPcolony()
         fout.write("""\n    //init Pcolony with alphabet size = %d, nr of agents = %d, capacity = %d
@@ -114,6 +153,9 @@ void lulu_init(Pcolony_t *pcol) {""" )
         fout.write("""\n\n    //init environment""")
         counter = 0;
         for obj, nr in pcol.env.items():
+            #replace %id and * with $id and $ respectively
+            obj = obj.replace("%", "$").replace("*", "$")
+
             fout.write("""\n        pcol->env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
             fout.write("""\n        pcol->env.items[%d].nr = %d;\n""" % (counter, nr))
             counter += 1
@@ -126,6 +168,9 @@ void lulu_init(Pcolony_t *pcol) {""" )
         else:
             counter = 0
             for obj, nr in pcol.parentSwarm.global_env.items():
+                #replace %id and * with $id and $ respectively
+                obj = obj.replace("%", "$").replace("*", "$")
+
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
                 counter += 1
@@ -138,6 +183,9 @@ void lulu_init(Pcolony_t *pcol) {""" )
             fout.write("""\n        //init obj multiset""")
             counter = 0;
             for obj, nr in pcol.agents[ag_name].obj.items():
+                #replace %id and * with $id and $ respectively
+                obj = obj.replace("%", "$").replace("*", "$")
+
                 for i in range(nr):
                     fout.write("""\n        pcol->agents[AGENT_%s].obj.items[%d] = OBJECT_ID_%s;""" % (ag_name.upper(), counter, obj.upper()))
                     counter += 1
@@ -163,6 +211,39 @@ void lulu_init(Pcolony_t *pcol) {""" )
     //destroys all of the subcomponents
     destroyPcolony(pcol);
 }""")
+        fout.write("""\n
+uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
+    //used for a cleaner iteration through the P colony
+    //instead of using agents[i] all of the time, we use just agent
+    Agent_t *agent;
+""")
+        fout.write("""\n    uint8_t obj_with_id[] = {""")
+        obj_with_id_size = 0;
+        for obj in pcol.A:
+            if ("_$id" in obj):
+                fout.write("OBJECT_ID_%s, " % obj.upper())
+                obj_with_id_size += 1
+        fout.write("""};
+    uint8_t obj_with_id_size = %d;""" % (obj_with_id_size))
+        fout.write("""\n\n    uint8_t my_symbolic_id = my_id - smallest_robot_uid;
+
+    for (uint8_t i = 0; i < obj_with_id_size; i++) {
+        //OBJECT_ID_B_$id is followed by OBJECT_ID_B_0
+        replaceObjInMultisetEnv(&pcol->env, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
+
+        for (uint8_t agent_nr = 0; agent_nr < pcol->nr_agents; agent_nr++) {
+            agent = &pcol->agents[agent_nr];
+            //replace $id in each agent's obj
+            //OBJECT_ID_B_$id is followed by OBJECT_ID_B_0
+            replaceObjInMultisetObj(&agent->obj, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
+
+            for (uint8_t program_nr = 0; program_nr < agent->nr_programs; program_nr++)
+                replaceObjInProgram(&agent->programs[program_nr], obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
+        }
+    }""")
+        fout.write("""\n\n    return my_symbolic_id;
+}""")
+
 # end createInstanceHeader()
 
 #   MAIN
@@ -194,10 +275,20 @@ if (__name__ == "__main__"):
         exit(1)
 
     if (len(sys.argv) < 3):
-        logging.error("Expected the path to the header (that will be generated) as the last parameter")
+        logging.error("Expected the path to the file (without extensions) that will be generated")
         exit(1)
 
-    path = sys.argv[2]
+    if (len(sys.argv) < 4):
+        logging.error("Expected the number of robots that make up the swarm")
+        exit(1)
+
+    if (len(sys.argv) < 5):
+        logging.error("Expected the minimum robot id (kilo_uid) as the last parameter")
+        exit(1)
+
+    nr_robots = int(sys.argv[2])
+    min_robot_id = int(sys.argv[3])
+    path = sys.argv[4]
 
     # read Pcolony from file
     pObj = sim.readInputFile(sys.argv[1])
@@ -217,12 +308,55 @@ if (__name__ == "__main__"):
             exit(1)
 
         pcol = pObj.colonies[sys.argv[2]]
-        path = sys.argv[3]
+        nr_robots = int(sys.argv[3])
+        min_robot_id = int(sys.argv[4])
+        path = sys.argv[5]
 
     else:
         pcol = pObj
 
+    #replacing wildcarded marks * and %id with $ and $id respectively
+    #in alphabet, all multisets and programs
+    for i, val in enumerate(pcol.A):
+        pcol.A[i] = val.replace("%", "$").replace("*", "$")
+
+    for key in pcol.env:
+        # if key contains wildcards
+        if ("*" in key or "%id" in key):
+            #copy value at wildcarded key at new $ key
+            pcol.env[key.replace("%", "$").replace("*", "$")] = pcol.env[key];
+            #delete the * key
+            del pcol.env[key]
+
+    #if this pcolony is part of swarm
+    if (pcol.parentSwarm != None):
+        for key in pcol.parentSwarm.global_env:
+            # if key contains wildcards
+            if ("*" in key or "%id" in key):
+                #copy value at wildcarded key at new $ key
+                pcol.parentSwarm.global_env[key.replace("%", "$").replace("*", "$")] = pcol.parentSwarm.global_env[key];
+                #delete the * key
+                del pcol.parentSwarm.global_env[key]
+
+    for ag_name in pcol.B:
+        for key in pcol.agents[ag_name].obj:
+            # if key contains wildcards
+            if ("*" in key or "%id" in key):
+                #copy value at wildcarded key at new $ key
+                pcol.agents[ag_name].obj[key.replace("%", "$").replace("*", "$")] = pcol.agents[ag_name].obj[key];
+                #delete the * key
+                del pcol.agents[ag_name].obj[key]
+        # end for key in obj
+        for prg_nr, prg in enumerate(pcol.agents[ag_name].programs):
+            for rule_nr, rule in enumerate(prg):
+                rule.lhs = rule.lhs.replace("%", "$").replace("*", "$")
+                rule.rhs = rule.rhs.replace("%", "$").replace("*", "$")
+                rule.alt_lhs = rule.alt_lhs.replace("%", "$").replace("*", "$")
+                rule.alt_rhs = rule.alt_rhs.replace("%", "$").replace("*", "$")
+
     logging.info("Generating the instance header (%s)" % (path + ".h"))
-    createInstanceHeader(pcol, path + ".h", sys.argv[1].split("/")[-1])
+    createInstanceHeader(pcol, path + ".h", sys.argv[1].split("/")[-1], nr_robots)
     logging.info("Generating the instance source (%s)" % (path + ".c"))
-    createInstanceSource(pcol, path)
+    createInstanceSource(pcol, path, nr_robots, min_robot_id)
+
+    pcol.print_colony_components()
