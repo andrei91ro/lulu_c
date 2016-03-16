@@ -70,17 +70,17 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
     //define array of names for objects and agents for debug
     extern char* objectNames[];
     extern char* agentNames[];
+#endif
 
-    /**
-     * @brief The smallest kilo_uid from the swarm (is set in instance.c by lulu_c.py)
-     */
-    extern const uint8_t smallest_robot_uid;
+/**
+ * @brief The smallest kilo_uid from the swarm (is set in instance.c by lulu_c.py)
+ */
+extern const uint8_t smallest_robot_uid;
 
-    /**
-     * @brief The number of robots that make up the swarm (is set in instance.c by lulu_c.py)
-     */
-    extern const uint8_t nr_swarm_robots;
-#endif""");
+/**
+ * @brief The number of robots that make up the swarm (is set in instance.c by lulu_c.py)
+ */
+extern const uint8_t nr_swarm_robots;""");
 
         fout.write("""\n\n/**
  * @brief Initialises the pcol object and all of it's components
