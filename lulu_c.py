@@ -230,6 +230,7 @@ uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
     for (uint8_t i = 0; i < obj_with_id_size; i++) {
         //OBJECT_ID_B_$id is followed by OBJECT_ID_B_0
         replaceObjInMultisetEnv(&pcol->env, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
+        replaceObjInMultisetEnv(&pcol->pswarm.global_env, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
 
         for (uint8_t agent_nr = 0; agent_nr < pcol->nr_agents; agent_nr++) {
             agent = &pcol->agents[agent_nr];
@@ -286,9 +287,7 @@ if (__name__ == "__main__"):
         logging.error("Expected the minimum robot id (kilo_uid) as the last parameter")
         exit(1)
 
-    nr_robots = int(sys.argv[2])
-    min_robot_id = int(sys.argv[3])
-    path = sys.argv[4]
+
 
     # read Pcolony from file
     pObj = sim.readInputFile(sys.argv[1])
@@ -314,6 +313,10 @@ if (__name__ == "__main__"):
 
     else:
         pcol = pObj
+
+        nr_robots = int(sys.argv[2])
+        min_robot_id = int(sys.argv[3])
+        path = sys.argv[4]
 
     #replacing wildcarded marks * and %id with $ and $id respectively
     #in alphabet, all multisets and programs
