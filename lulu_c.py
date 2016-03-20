@@ -178,7 +178,8 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
 
         for ag_name in pcol.B:
             fout.write("""\n\n    //init agent %s""" % ag_name)
-            fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), len(pcol.agents[ag_name].programs)))
+            #fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), len(pcol.agents[ag_name].programs)))
+            fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), getNrOfProgramsAfterExpansion(pcol.agents[ag_name], nr_robots)))
 
             fout.write("""\n        //init obj multiset""")
             counter = 0;
@@ -201,7 +202,8 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
                         fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_%s, OBJECT_ID_%s, OBJECT_ID_%s, NO_OBJECT, NO_OBJECT);""" % (ag_name.upper(), prg_nr, rule_nr, rule.type.name.upper(), rule.lhs.upper(), rule.rhs.upper()))
                     else:
                         fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_CONDITIONAL_%s_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s);""" % (ag_name.upper(), prg_nr, rule_nr, rule.type.name.upper(), rule.alt_type.name.upper(), rule.lhs.upper(), rule.rhs.upper(), rule.alt_lhs.upper(), rule.alt_rhs.upper()))
-                fout.write("""\n            //end init program %d""" % prg_nr)
+                fout.write("""\n            //end init program %d
+            pcol->agents[AGENT_%s].init_program_nr++;""" % (prg_nr, ag_name.upper()))
             fout.write("""\n        //end init programs""")
 
             fout.write("""\n    //end init agent %s""" % ag_name)
@@ -217,35 +219,81 @@ uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
     //instead of using agents[i] all of the time, we use just agent
     Agent_t *agent;
 """)
+
         fout.write("""\n    uint8_t obj_with_id[] = {""")
-        obj_with_id_size = 0;
+        obj_with_id_size = 0
         for obj in pcol.A:
             if ("_$id" in obj):
                 fout.write("OBJECT_ID_%s, " % obj.upper())
                 obj_with_id_size += 1
         fout.write("""};
     uint8_t obj_with_id_size = %d;""" % (obj_with_id_size))
+
+        fout.write("""\n    uint8_t obj_with_any[] = {""")
+        obj_with_any_size = 0
+        is_obj_with_any_followed_by_id = []
+        for i, obj in enumerate(pcol.A):
+            if (obj.endswith("_$")):
+                fout.write("OBJECT_ID_%s, " % obj.upper())
+                # if we are at least 2 objects before the end of the list
+                if (i < len(pcol.A) - 1):
+                    # check if this _$ wildcarded object is followed by a _$id object
+                    if ("_$id" in pcol.A[i+1]):
+                        is_obj_with_any_followed_by_id.append(1)
+                    else:
+                        is_obj_with_any_followed_by_id.append(0)
+                else:
+                    # this (_$) object is the last one in the list
+                    is_obj_with_any_followed_by_id.append(0)
+                obj_with_any_size += 1
+        fout.write("""};
+    uint8_t obj_with_any_size = %d;
+    uint8_t is_obj_with_any_followed_by_id[] = {%s};""" % (obj_with_any_size,
+        str(is_obj_with_any_followed_by_id).replace("[", "").replace("]", "")))
+
         fout.write("""\n\n    uint8_t my_symbolic_id = my_id - smallest_robot_uid;
+    //replace $ID wildcarded objects with the object corresponding to the symbolic id
+    //  e.g.: B_$ID -> B_0 for my_symbolic_id = 0
+    replacePcolonyWildID(pcol, obj_with_id, obj_with_id_size, my_symbolic_id);
 
-    for (uint8_t i = 0; i < obj_with_id_size; i++) {
-        //OBJECT_ID_B_$id is followed by OBJECT_ID_B_0
-        replaceObjInMultisetEnv(&pcol->env, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
-        replaceObjInMultisetEnv(&pcol->pswarm.global_env, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
+    //expand each obj_with_any[] element into nr_swarm_robots objects except my_symbolic id.
+    //  e.g.: B_$ -> B_0, B_2 for nr_swarm_robots = 3 and my_symbolic_id = 1
+    expandPcolonyWildAny(pcol, obj_with_any, is_obj_with_any_followed_by_id, obj_with_any_size, my_symbolic_id, nr_swarm_robots);
 
-        for (uint8_t agent_nr = 0; agent_nr < pcol->nr_agents; agent_nr++) {
-            agent = &pcol->agents[agent_nr];
-            //replace $id in each agent's obj
-            //OBJECT_ID_B_$id is followed by OBJECT_ID_B_0
-            replaceObjInMultisetObj(&agent->obj, obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
-
-            for (uint8_t program_nr = 0; program_nr < agent->nr_programs; program_nr++)
-                replaceObjInProgram(&agent->programs[program_nr], obj_with_id[i], obj_with_id[i] + 1 + my_symbolic_id);
-        }
-    }""")
-        fout.write("""\n\n    return my_symbolic_id;
+    return my_symbolic_id;
 }""")
 
 # end createInstanceHeader()
+
+def getNrOfProgramsAfterExpansion(agent, suffixListSize):
+    """Returns the final number of programs that will result after all programs (within this agent)
+    with * wildcard objects have been expanded
+
+    :agent: The agent whose programs will checked
+    :suffixListSize: The number of programs that result after expanding a program such as < X_* -> e, e->X_* >
+    if suffixListSize = 2 then we obtain 2 new programs, < X_0 - > e ... > and < X_1 -> e ...> that replace the original one
+    :returns: The final number of programs that will result after expansion """
+
+    check_for_any_wild = [x.endswith("_$") for x in agent.colony.A]
+    any_wild_objects = []
+    for i, val in enumerate(check_for_any_wild):
+        if (val):
+            any_wild_objects.append(agent.colony.A[i])
+
+    counter = 0
+
+    for obj in any_wild_objects:
+        for program in agent.programs:
+            wild_exists_in_program = False
+            for rule in program:
+                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or rule.alt_rhs):
+                    wild_exists_in_program = True
+                    break;
+            if (wild_exists_in_program):
+                counter += suffixListSize
+
+    return counter + len(agent.programs)
+# end getNrOfProgramsAfterExpansion()
 
 #   MAIN
 if (__name__ == "__main__"):
