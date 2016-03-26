@@ -65,6 +65,9 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
         if ("msg_distance" in pcol.B):
             fout.write("\n#define USING_AGENT_MSG_DISTANCE //this ensures that the code associated with the MSG_DISTANCE agent is included in Lulu_kilobot")
 
+        fout.write("\n")
+        if ("d_all" in pcol.A):
+            fout.write("""\n#define USING_OBJECT_D_ALL //this ensures that the code associated with processing D_ALL objects is included in Lulu_kilobot""")
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
@@ -193,15 +196,23 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
 
             fout.write("""\n\n        //init programs""")
             for prg_nr, prg in enumerate(pcol.agents[ag_name].programs):
-                fout.write("""\n\n            initProgram(&pcol->agents[AGENT_%s].programs[%d], pcol->n);""" % (ag_name.upper(), prg_nr))
+                fout.write("""\n\n            initProgram(&pcol->agents[AGENT_%s].programs[%d], %d);""" % (ag_name.upper(), prg_nr, getNrOfRulesWithoutRepetitions(prg)))
                 fout.write("""\n            //init program %d: < %s >""" % (prg_nr, prg.print()))
 
+                rule_index = 0
                 for rule_nr, rule in enumerate(prg):
+                    # skip rules that contain identical operands and thus have no effect
+                    if (rule.lhs == rule.rhs and rule.lhs == 'e' and rule.main_type != sim.RuleType.conditional):
+                        continue
+
                     fout.write("""\n                //init rule %d: %s""" % (rule_nr, rule.print(toString=True)) )
                     if (rule.main_type != sim.RuleType.conditional):
-                        fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_%s, OBJECT_ID_%s, OBJECT_ID_%s, NO_OBJECT, NO_OBJECT);""" % (ag_name.upper(), prg_nr, rule_nr, rule.type.name.upper(), rule.lhs.upper(), rule.rhs.upper()))
+                        fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_%s, OBJECT_ID_%s, OBJECT_ID_%s, NO_OBJECT, NO_OBJECT);""" % (ag_name.upper(), prg_nr, rule_index, rule.type.name.upper(), rule.lhs.upper(), rule.rhs.upper()))
                     else:
-                        fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_CONDITIONAL_%s_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s);""" % (ag_name.upper(), prg_nr, rule_nr, rule.type.name.upper(), rule.alt_type.name.upper(), rule.lhs.upper(), rule.rhs.upper(), rule.alt_lhs.upper(), rule.alt_rhs.upper()))
+                        fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_CONDITIONAL_%s_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s);""" % (ag_name.upper(), prg_nr, rule_index, rule.type.name.upper(), rule.alt_type.name.upper(), rule.lhs.upper(), rule.rhs.upper(), rule.alt_lhs.upper(), rule.alt_rhs.upper()))
+
+                    #increase rule_index
+                    rule_index += 1
                 fout.write("""\n            //end init program %d
             pcol->agents[AGENT_%s].init_program_nr++;""" % (prg_nr, ag_name.upper()))
             fout.write("""\n        //end init programs""")
@@ -294,6 +305,20 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
 
     return counter + len(agent.programs)
 # end getNrOfProgramsAfterExpansion()
+
+def getNrOfRulesWithoutRepetitions(prg):
+    """Returns the number of rules from this program that do not consist of operand repetitions such as e->e
+    Note: conditional rules are included without checking because it is assumed that they were introduce to check a condition
+    :returns: Number of rules that have lhs different from rhs"""
+
+    nr_rules = len(prg)
+    for rule in prg:
+        if (rule.main_type != sim.RuleType.conditional):
+            if (rule.lhs == rule.rhs and rule.lhs == "e"):
+                nr_rules -= 1
+
+    return nr_rules
+# end getNrOfRulesWithoutRepetitions()
 
 #   MAIN
 if (__name__ == "__main__"):
