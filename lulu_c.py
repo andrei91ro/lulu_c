@@ -3,6 +3,7 @@ import colorlog # colors log output
 from lulu_pcol_sim import sim
 import sys # for argv
 import time # for strftime()
+import natsort # for natural sorting of alphabet (needed because the order of objects has to be B_0, B_1, B_2, B_10, B_11 and not B_0, B_1, B_10, B_11, ...)
 
 def createInstanceHeader(pcol, path, originalFilename, nr_robots):
     """Create an instance of the passed P colony that is written as a header in C at the given path
@@ -42,8 +43,8 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
                     #add the extetendet object list to the alphabet
                     pcol.A.extend(extension)
 
-        # sort objects alphabetically
-        pcol.A.sort()
+        # sort objects naturally
+        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_$', '/') + '-')
         for i, obj in enumerate(pcol.A):
             if (obj in ['e', 'f']):
                 continue; # they are already defined in lulu.h
