@@ -10,6 +10,8 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
     :pcol: The pcolony object that was read by lulu_pcol_sim
     :path: The path to the instance.h that will be written"""
 
+    needsWildcardExpansion = False
+
     with open(path, "w") as fout:
         fout.write("""// vim:filetype=c
 /**
@@ -31,6 +33,7 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
         for a in pcol.A[:]:
             # both $ and $id wildcards need extended objects
             if ("_$" in a or "_$id" in a):
+                needsWildcardExpansion = True
                 logging.debug("Extending %s wildcarded object" % a)
                 # construct extended object list
                 extension = [a.replace("$id", "%d" % i).replace("$", "%d" % i) for i in range(nr_robots)]
@@ -57,6 +60,9 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
             fout.write("\n    AGENT_%s," % agent_name.upper());
 
         fout.write("\n};")
+
+        if (needsWildcardExpansion):
+            fout.write("""\n#define NEEDING_WILDCARD_EXPANSION //this ensures that the wildcard expansion code is included""")
 
         if ("motion" in pcol.B):
             fout.write("\n#define USING_AGENT_MOTION //this ensures that the code associated with the MOTION agent is included in Lulu_kilobot")
@@ -99,16 +105,17 @@ void lulu_init(Pcolony_t *pcol);
  */
 void lulu_destroy(Pcolony_t *pcol);
 
-/**
- * @brief Expands and replaces wildcarded objects with the appropriate objects
- * Objects that end with _$ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
- *
- * @param pcol The pcolony where the replacements will take place
- * @param my_id The kilo_uid of the robot
- * @return The symbolic id that corresponds to this robot (my_id - smallest_robot_uid)
- */
-uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id);
-
+#ifdef NEEDING_WILDCARD_EXPANSION
+    /**
+     * @brief Expands and replaces wildcarded objects with the appropriate objects
+     * Objects that end with _$ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
+     *
+     * @param pcol The pcolony where the replacements will take place
+     * @param my_id The kilo_uid of the robot
+     * @return The symbolic id that corresponds to this robot (my_id - smallest_robot_uid)
+     */
+    uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id);
+#endif
 #endif""")
 # end createInstanceHeader()
 
@@ -126,7 +133,11 @@ def createInstanceSource(pcol, path, nr_robots, smallest_robot_id):
 
     with open(path + ".c", "w") as fout:
         fout.write("""#include "%s.h"
-#include <stdlib.h>
+
+#ifdef NEEDING_WILDCARD_EXPANSION
+    #include "wild_expand.h"
+#endif
+
 #ifdef PCOL_SIM""" % path.split("/")[-1]) #only filename
 
         fout.write("""\n    char* objectNames[] = {[NO_OBJECT] = "no_object", """)
@@ -225,6 +236,7 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
     destroyPcolony(pcol);
 }""")
         fout.write("""\n
+#ifdef NEEDING_WILDCARD_EXPANSION
 uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
     //used for a cleaner iteration through the P colony
     //instead of using agents[i] all of the time, we use just agent
@@ -272,7 +284,8 @@ uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
     expandPcolonyWildAny(pcol, obj_with_any, is_obj_with_any_followed_by_id, obj_with_any_size, my_symbolic_id, nr_swarm_robots);
 
     return my_symbolic_id;
-}""")
+}
+#endif""")
 
 # end createInstanceHeader()
 
@@ -293,14 +306,15 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
 
     counter = 0
 
-    for obj in any_wild_objects:
-        for program in agent.programs:
-            wild_exists_in_program = False
-            for rule in program:
+    for program in agent.programs:
+        wild_exists_in_program = False
+        for rule in program:
+            for obj in any_wild_objects:
                 if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or rule.alt_rhs):
                     wild_exists_in_program = True
                     break;
-            if (wild_exists_in_program):
+        # end for rule in program
+        if (wild_exists_in_program):
                 counter += suffixListSize
 
     return counter + len(agent.programs)
