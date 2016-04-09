@@ -117,7 +117,7 @@ void lulu_destroy(Pcolony_t *pcol);
      * @param my_id The kilo_uid of the robot
      * @return The symbolic id that corresponds to this robot (my_id - smallest_robot_uid)
      */
-    uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id);
+    uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id);
 #endif
 #endif""")
 # end createInstanceHeader()
@@ -240,7 +240,7 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
 }""")
         fout.write("""\n
 #ifdef NEEDING_WILDCARD_EXPANSION
-uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
+uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
     //used for a cleaner iteration through the P colony
     //instead of using agents[i] all of the time, we use just agent
     Agent_t *agent;
@@ -277,7 +277,8 @@ uint8_t expand_pcolony(Pcolony_t *pcol, uint8_t my_id) {
     uint8_t is_obj_with_any_followed_by_id[] = {%s};""" % (obj_with_any_size,
         str(is_obj_with_any_followed_by_id).replace("[", "").replace("]", "")))
 
-        fout.write("""\n\n    uint8_t my_symbolic_id = my_id - smallest_robot_uid;
+        fout.write("""\n\n    uint16_t my_symbolic_id = my_id - smallest_robot_uid;
+
     //replace $ID wildcarded objects with the object corresponding to the symbolic id
     //  e.g.: B_$ID -> B_0 for my_symbolic_id = 0
     replacePcolonyWildID(pcol, obj_with_id, obj_with_id_size, my_symbolic_id);
