@@ -75,6 +75,8 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
         fout.write("\n")
         if ("d_all" in pcol.A):
             fout.write("""\n#define USING_OBJECT_D_ALL //this ensures that the code associated with processing D_ALL objects is included in Lulu_kilobot""")
+        if ("d_next" in pcol.A):
+            fout.write("""\n#define USING_OBJECT_D_NEXT //this ensures that the code associated with processing D_NEXT objects is included in Lulu_kilobot""")
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
