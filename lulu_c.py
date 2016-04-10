@@ -87,12 +87,12 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
 /**
  * @brief The smallest kilo_uid from the swarm (is set in instance.c by lulu_c.py)
  */
-extern const uint8_t smallest_robot_uid;
+extern const uint16_t smallest_robot_uid;
 
 /**
  * @brief The number of robots that make up the swarm (is set in instance.c by lulu_c.py)
  */
-extern const uint8_t nr_swarm_robots;""");
+extern const uint16_t nr_swarm_robots;""");
 
         fout.write("""\n\n/**
  * @brief Initialises the pcol object and all of it's components
@@ -155,9 +155,9 @@ def createInstanceSource(pcol, path, nr_robots, smallest_robot_id):
 #endif
 
 //the smallest kilo_uid from the swarm
-const uint8_t smallest_robot_uid = %d;
+const uint16_t smallest_robot_uid = %d;
 //the number of robots that make up the swarm
-const uint8_t nr_swarm_robots = %d;
+const uint16_t nr_swarm_robots = %d;
 
 void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
 
