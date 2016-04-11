@@ -33,18 +33,18 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
         # extend wildcard objects to _0, _1, ... _n where n = nr_robots
         for a in pcol.A[:]:
             # both $ and $id wildcards need extended objects
-            if ("_$" in a or "_$id" in a):
+            if ("_W_ALL" in a or "_W_ID" in a):
                 needsWildcardExpansion = True
                 logging.debug("Extending %s wildcarded object" % a)
                 # construct extended object list
-                extension = [a.replace("$id", "%d" % i).replace("$", "%d" % i) for i in range(nr_robots)]
+                extension = [a.replace("W_ID", "%d" % i).replace("W_ALL", "%d" % i) for i in range(nr_robots)]
                 # if this extension has not been previously added
                 if (not set(extension).issubset(set(pcol.A))):
                     #add the extetendet object list to the alphabet
                     pcol.A.extend(extension)
 
         # sort objects naturally
-        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_$', '/') + '-')
+        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_W_ID', '/').replace('_W_ALL', '/') + '-')
         for i, obj in enumerate(pcol.A):
             if (obj in ['e', 'f']):
                 continue; # they are already defined in lulu.h
@@ -412,13 +412,13 @@ if (__name__ == "__main__"):
     #replacing wildcarded marks * and %id with $ and $id respectively
     #in alphabet, all multisets and programs
     for i, val in enumerate(pcol.A):
-        pcol.A[i] = val.replace("%", "$").replace("*", "$")
+        pcol.A[i] = val.replace("%id", "W_ID").replace("*", "W_ALL")
 
     for key in pcol.env:
         # if key contains wildcards
         if ("*" in key or "%id" in key):
             #copy value at wildcarded key at new $ key
-            pcol.env[key.replace("%", "$").replace("*", "$")] = pcol.env[key];
+            pcol.env[key.replace("%id", "W_ID").replace("*", "W_ALL")] = pcol.env[key];
             #delete the * key
             del pcol.env[key]
 
@@ -428,7 +428,7 @@ if (__name__ == "__main__"):
             # if key contains wildcards
             if ("*" in key or "%id" in key):
                 #copy value at wildcarded key at new $ key
-                pcol.parentSwarm.global_env[key.replace("%", "$").replace("*", "$")] = pcol.parentSwarm.global_env[key];
+                pcol.parentSwarm.global_env[key.replace("%id", "W_ID").replace("*", "W_ALL")] = pcol.parentSwarm.global_env[key];
                 #delete the * key
                 del pcol.parentSwarm.global_env[key]
 
@@ -437,16 +437,16 @@ if (__name__ == "__main__"):
             # if key contains wildcards
             if ("*" in key or "%id" in key):
                 #copy value at wildcarded key at new $ key
-                pcol.agents[ag_name].obj[key.replace("%", "$").replace("*", "$")] = pcol.agents[ag_name].obj[key];
+                pcol.agents[ag_name].obj[key.replace("%id", "W_ID").replace("*", "W_ALL")] = pcol.agents[ag_name].obj[key];
                 #delete the * key
                 del pcol.agents[ag_name].obj[key]
         # end for key in obj
         for prg_nr, prg in enumerate(pcol.agents[ag_name].programs):
             for rule_nr, rule in enumerate(prg):
-                rule.lhs = rule.lhs.replace("%", "$").replace("*", "$")
-                rule.rhs = rule.rhs.replace("%", "$").replace("*", "$")
-                rule.alt_lhs = rule.alt_lhs.replace("%", "$").replace("*", "$")
-                rule.alt_rhs = rule.alt_rhs.replace("%", "$").replace("*", "$")
+                rule.lhs = rule.lhs.replace("%id", "W_ID").replace("*", "W_ALL")
+                rule.rhs = rule.rhs.replace("%id", "W_ID").replace("*", "W_ALL")
+                rule.alt_lhs = rule.alt_lhs.replace("%id", "W_ID").replace("*", "W_ALL")
+                rule.alt_rhs = rule.alt_rhs.replace("%id", "W_ID").replace("*", "W_ALL")
 
     logging.info("Generating the instance header (%s)" % (path + ".h"))
     createInstanceHeader(pcol, path + ".h", sys.argv[1].split("/")[-1], nr_robots)
