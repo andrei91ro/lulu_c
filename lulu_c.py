@@ -111,7 +111,7 @@ void lulu_destroy(Pcolony_t *pcol);
 #ifdef NEEDING_WILDCARD_EXPANSION
     /**
      * @brief Expands and replaces wildcarded objects with the appropriate objects
-     * Objects that end with _$ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
+     * Objects that end with _W_ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
      *
      * @param pcol The pcolony where the replacements will take place
      * @param my_id The kilo_uid of the robot
@@ -171,7 +171,6 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
         counter = 0;
         for obj, nr in pcol.env.items():
             #replace %id and * with $id and $ respectively
-            obj = obj.replace("%", "$").replace("*", "$")
 
             fout.write("""\n        pcol->env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
             fout.write("""\n        pcol->env.items[%d].nr = %d;\n""" % (counter, nr))
@@ -186,7 +185,6 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
             counter = 0
             for obj, nr in pcol.parentSwarm.global_env.items():
                 #replace %id and * with $id and $ respectively
-                obj = obj.replace("%", "$").replace("*", "$")
 
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
@@ -202,7 +200,6 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
             counter = 0;
             for obj, nr in pcol.agents[ag_name].obj.items():
                 #replace %id and * with $id and $ respectively
-                obj = obj.replace("%", "$").replace("*", "$")
 
                 for i in range(nr):
                     fout.write("""\n        pcol->agents[AGENT_%s].obj.items[%d] = OBJECT_ID_%s;""" % (ag_name.upper(), counter, obj.upper()))
@@ -249,7 +246,7 @@ uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
         fout.write("""\n    uint8_t obj_with_id[] = {""")
         obj_with_id_size = 0
         for obj in pcol.A:
-            if ("_$id" in obj):
+            if ("_W_ID" in obj):
                 fout.write("OBJECT_ID_%s, " % obj.upper())
                 obj_with_id_size += 1
         fout.write("""};
@@ -259,12 +256,12 @@ uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
         obj_with_any_size = 0
         is_obj_with_any_followed_by_id = []
         for i, obj in enumerate(pcol.A):
-            if (obj.endswith("_$")):
+            if (obj.endswith("_W_ALL")):
                 fout.write("OBJECT_ID_%s, " % obj.upper())
                 # if we are at least 2 objects before the end of the list
                 if (i < len(pcol.A) - 1):
                     # check if this _$ wildcarded object is followed by a _$id object
-                    if ("_$id" in pcol.A[i+1]):
+                    if ("_W_ID" in pcol.A[i+1]):
                         is_obj_with_any_followed_by_id.append(1)
                     else:
                         is_obj_with_any_followed_by_id.append(0)
@@ -279,12 +276,12 @@ uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
 
         fout.write("""\n\n    uint16_t my_symbolic_id = my_id - smallest_robot_uid;
 
-    //replace $ID wildcarded objects with the object corresponding to the symbolic id
-    //  e.g.: B_$ID -> B_0 for my_symbolic_id = 0
+    //replace W_ID wildcarded objects with the object corresponding to the symbolic id
+    //  e.g.: B_W_ID -> B_0 for my_symbolic_id = 0
     replacePcolonyWildID(pcol, obj_with_id, obj_with_id_size, my_symbolic_id);
 
     //expand each obj_with_any[] element into nr_swarm_robots objects except my_symbolic id.
-    //  e.g.: B_$ -> B_0, B_2 for nr_swarm_robots = 3 and my_symbolic_id = 1
+    //  e.g.: B_W_ALL -> B_0, B_2 for nr_swarm_robots = 3 and my_symbolic_id = 1
     expandPcolonyWildAny(pcol, obj_with_any, is_obj_with_any_followed_by_id, obj_with_any_size, my_symbolic_id, nr_swarm_robots);
 
     return my_symbolic_id;
@@ -302,7 +299,7 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
     if suffixListSize = 2 then we obtain 2 new programs, < X_0 - > e ... > and < X_1 -> e ...> that replace the original one
     :returns: The final number of programs that will result after expansion """
 
-    check_for_any_wild = [x.endswith("_$") for x in agent.colony.A]
+    check_for_any_wild = [x.endswith("_W_ALL") for x in agent.colony.A]
     any_wild_objects = []
     for i, val in enumerate(check_for_any_wild):
         if (val):
