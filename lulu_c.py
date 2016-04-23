@@ -191,6 +191,34 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
                 counter += 1
         fout.write("""\n    //end init global pswarm environment""")
 
+        fout.write("""\n\n    //init INPUT global pswarm environment""")
+        if (pcol.parentSwarm == None or len(pcol.parentSwarm.in_global_env) == 0):
+            fout.write("""\n        pcol->pswarm.in_global_env.items[0].id = OBJECT_ID_E;""")
+            fout.write("""\n        pcol->pswarm.in_global_env.items[0].nr = 1;""")
+        else:
+            counter = 0
+            for obj, nr in pcol.parentSwarm.in_global_env.items():
+                #replace %id and * with $id and $ respectively
+
+                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].nr = %d;""" % (counter, nr))
+                counter += 1
+        fout.write("""\n    //end init INPUT global pswarm environment""")
+
+        fout.write("""\n\n    //init OUTPUT global pswarm environment""")
+        if (pcol.parentSwarm == None or len(pcol.parentSwarm.out_global_env) == 0):
+            fout.write("""\n        pcol->pswarm.out_global_env.items[0].id = OBJECT_ID_E;""")
+            fout.write("""\n        pcol->pswarm.out_global_env.items[0].nr = 1;""")
+        else:
+            counter = 0
+            for obj, nr in pcol.parentSwarm.out_global_env.items():
+                #replace %id and * with $id and $ respectively
+
+                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].nr = %d;""" % (counter, nr))
+                counter += 1
+        fout.write("""\n    //end init OUTPUT global pswarm environment""")
+
         for ag_name in pcol.B:
             fout.write("""\n\n    //init agent %s""" % ag_name)
             #fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), len(pcol.agents[ag_name].programs)))
