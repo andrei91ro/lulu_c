@@ -335,12 +335,15 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
 
     counter = 0
 
+    logging.info("wild_ANY objects = %s" % any_wild_objects)
+
     for program in agent.programs:
         wild_exists_in_program = False
         for rule in program:
             for obj in any_wild_objects:
-                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or rule.alt_rhs):
+                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or obj == rule.alt_rhs):
                     wild_exists_in_program = True
+                    logging.warning("wild_ANY object %s exists in program %s rule %s" % (obj, program.print(), rule.print(toString=True)))
                     break;
         # end for rule in program
         if (wild_exists_in_program):
