@@ -77,6 +77,19 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
             fout.write("""\n#define USING_OBJECT_D_ALL //this ensures that the code associated with processing D_ALL objects is included in Lulu_kilobot""")
         if ("d_next" in pcol.A):
             fout.write("""\n#define USING_OBJECT_D_NEXT //this ensures that the code associated with processing D_NEXT objects is included in Lulu_kilobot""")
+
+        # check if using {IN,OUT}_EXTEROCEPTIVE rules (<I=> or <=O>)
+        using_in_out_exteroceptive_rules = False
+        for agent in pcol.agents.values():
+            for program in agent.programs:
+                for rule in program:
+                    if (rule.type == sim.RuleType.in_exteroceptive or rule.type == sim.RuleType.out_exteroceptive or
+                            rule.alt_type == sim.RuleType.in_exteroceptive or rule.alt_type == sim.RuleType.out_exteroceptive):
+                        using_in_out_exteroceptive_rules = True
+                        break;
+        if (using_in_out_exteroceptive_rules):
+            fout.write("""\n#define USING_IN_OUT_EXTEROCEPTIVE_RULES //this ensures that the code associated with processing IN_EXTEROCEPTIVE (<I=>) or OUT_EXTEROCEPTIVE (<=O>) rules is included in Lulu_kilobot""")
+
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
