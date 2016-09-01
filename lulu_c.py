@@ -44,7 +44,7 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
                     pcol.A.extend(extension)
 
         # sort objects naturally
-        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_W_ID', '/').replace('_W_ALL', '/') + '-')
+        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_W_ID', '/').replace('_W_ALL', '.'))
         for i, obj in enumerate(pcol.A):
             if (obj in ['e', 'f']):
                 continue; # they are already defined in lulu.h
