@@ -77,6 +77,19 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
             fout.write("""\n#define USING_OBJECT_D_ALL //this ensures that the code associated with processing D_ALL objects is included in Lulu_kilobot""")
         if ("d_next" in pcol.A):
             fout.write("""\n#define USING_OBJECT_D_NEXT //this ensures that the code associated with processing D_NEXT objects is included in Lulu_kilobot""")
+
+        # check if using {IN,OUT}_EXTEROCEPTIVE rules (<I=> or <=O>)
+        using_in_out_exteroceptive_rules = False
+        for agent in pcol.agents.values():
+            for program in agent.programs:
+                for rule in program:
+                    if (rule.type == sim.RuleType.in_exteroceptive or rule.type == sim.RuleType.out_exteroceptive or
+                            rule.alt_type == sim.RuleType.in_exteroceptive or rule.alt_type == sim.RuleType.out_exteroceptive):
+                        using_in_out_exteroceptive_rules = True
+                        break;
+        if (using_in_out_exteroceptive_rules):
+            fout.write("""\n#define USING_IN_OUT_EXTEROCEPTIVE_RULES //this ensures that the code associated with processing IN_EXTEROCEPTIVE (<I=>) or OUT_EXTEROCEPTIVE (<=O>) rules is included in Lulu_kilobot""")
+
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
@@ -190,6 +203,34 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
                 counter += 1
         fout.write("""\n    //end init global pswarm environment""")
+
+        fout.write("""\n\n    //init INPUT global pswarm environment""")
+        if (pcol.parentSwarm == None or len(pcol.parentSwarm.in_global_env) == 0):
+            fout.write("""\n        pcol->pswarm.in_global_env.items[0].id = OBJECT_ID_E;""")
+            fout.write("""\n        pcol->pswarm.in_global_env.items[0].nr = 1;""")
+        else:
+            counter = 0
+            for obj, nr in pcol.parentSwarm.in_global_env.items():
+                #replace %id and * with $id and $ respectively
+
+                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].nr = %d;""" % (counter, nr))
+                counter += 1
+        fout.write("""\n    //end init INPUT global pswarm environment""")
+
+        fout.write("""\n\n    //init OUTPUT global pswarm environment""")
+        if (pcol.parentSwarm == None or len(pcol.parentSwarm.out_global_env) == 0):
+            fout.write("""\n        pcol->pswarm.out_global_env.items[0].id = OBJECT_ID_E;""")
+            fout.write("""\n        pcol->pswarm.out_global_env.items[0].nr = 1;""")
+        else:
+            counter = 0
+            for obj, nr in pcol.parentSwarm.out_global_env.items():
+                #replace %id and * with $id and $ respectively
+
+                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].nr = %d;""" % (counter, nr))
+                counter += 1
+        fout.write("""\n    //end init OUTPUT global pswarm environment""")
 
         for ag_name in pcol.B:
             fout.write("""\n\n    //init agent %s""" % ag_name)
@@ -307,12 +348,15 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
 
     counter = 0
 
+    logging.info("wild_ANY objects = %s" % any_wild_objects)
+
     for program in agent.programs:
         wild_exists_in_program = False
         for rule in program:
             for obj in any_wild_objects:
-                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or rule.alt_rhs):
+                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or obj == rule.alt_rhs):
                     wild_exists_in_program = True
+                    logging.warning("wild_ANY object %s exists in program %s rule %s" % (obj, program.print(), rule.print(toString=True)))
                     break;
         # end for rule in program
         if (wild_exists_in_program):
