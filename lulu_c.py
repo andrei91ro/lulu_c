@@ -71,6 +71,8 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
             fout.write("\n#define USING_AGENT_LED_RGB //this ensures that the code associated with the LED_RGB agent is included in Lulu_kilobot")
         if ("msg_distance" in pcol.B):
             fout.write("\n#define USING_AGENT_MSG_DISTANCE //this ensures that the code associated with the MSG_DISTANCE agent is included in Lulu_kilobot")
+        if ("timer" in pcol.B):
+            fout.write("\n#define USING_AGENT_TIMER //this ensures that the code associated with the TIMER agent is included in Lulu_kilobot")
 
         fout.write("\n")
         if ("d_all" in pcol.A):
