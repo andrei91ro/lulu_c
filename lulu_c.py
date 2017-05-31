@@ -5,6 +5,203 @@ import sys # for argv
 import time # for strftime()
 import natsort # for natural sorting of alphabet (needed because the order of objects has to be B_0, B_1, B_2, B_10, B_11 and not B_0, B_1, B_10, B_11, ...)
 
+def writeMultisetObj(objSet, capacity):
+    """Write agent multiset structure (multiset_obj_t) initialization from a collections.Counter object
+
+    :objSet: collections.Counter object
+    :capacity: P colony capacity
+    :returns: String representation (in C) of the agent multiset"""
+
+    result = """
+        .items = (uint8_t[%d]) {""" % capacity
+    for obj, nr in objSet.items():
+        for i in range(nr):
+            result += "OBJECT_ID_%s, " % obj.upper()
+    result +="""},
+        .size = %d,""" % capacity
+
+    return result
+# end writeMultisetObj()
+
+# TODO initialize entire multiset with NO_OBJECT, except for objects that are in envSet
+def writeMultisetEnv(envSet, nr_A):
+    """Write environment multiset structure (multiset_env_t) initialization from a collections.Counter object
+
+    :envSet: collections.Counter object
+    :nr_A: P colony alphabet size
+    :returns: String representation (in C) of the environment multiset"""
+
+    result = """
+    .items = (multiset_env_item_t[%d]) {""" % nr_A
+    #for obj, nr in envSet.items():
+    for obj in pcol.A:
+        if (envSet[obj] > 0):
+            result += """
+        {.id = OBJECT_ID_%s, .nr = %d},""" % (obj.upper(), envSet[obj])
+        else:
+            result += """
+        {.id = NO_OBJECT, .nr = 0},"""
+    result +="""
+    },
+    .size = %d,""" % nr_A
+
+    return result
+# end writeMultisetObj()
+
+def writeRule(rule):
+    """Write rule structure (Rule_t) from Rule object
+
+    :rule: Rule object
+    :returns: String representation (in C) of the rule"""
+
+
+    if (rule.main_type != sim.RuleType.conditional):
+        result = """
+            .type = %s,
+            .exec_rule_nr = RULE_EXEC_OPTION_NONE,
+            .lhs = OBJECT_ID_%s,
+            .rhs = OBJECT_ID_%s,
+            .alt_lhs = NO_OBJECT,
+            .alt_rhs = NO_OBJECT,""" % (
+            "RULE_TYPE_%s" % rule.type.name.upper(),
+            rule.lhs.upper(),
+            rule.rhs.upper(),
+        )
+    else:
+        result = """
+            .type = %s,
+            .exec_rule_nr = RULE_EXEC_OPTION_NONE,
+            .lhs = OBJECT_ID_%s,
+            .rhs = OBJECT_ID_%s,
+            .alt_lhs = OBJECT_ID_%s,
+            .alt_rhs = OBJECT_ID_%s,""" % (
+            "RULE_TYPE_CONDITIONAL_%s_%s" % (rule.type.name.upper(), rule.alt_type.name.upper()),
+            rule.lhs.upper(),
+            rule.rhs.upper(),
+            rule.alt_lhs.upper(),
+            rule.alt_rhs.upper()
+        )
+
+    return result
+# end writeRule()
+
+def writeProgram(program):
+    """Write program structure (Program_t) from Program object
+
+    :program: Program object
+    :returns: String representation (in C) of the program"""
+
+    result = """
+    /* %s */
+    .nr_rules = %d,
+    .rules = (Rule_t[%d]) {
+    """ % (program.print(), len(program), len(program))
+
+    for rule in program:
+        result +="""
+        {%s
+        },""" % writeRule(rule)
+
+    result +="""
+    }"""
+
+    return result
+# end writeProgram()
+
+def writeAgent(agent, capacity):
+    """Write agent structure (Agent_t) from Agent object
+
+    :agent: Agent object
+    :capacity: P colony capacity
+    :returns: String representation (in C) of the agent"""
+
+    result = """
+    .nr_programs = %d,
+    .chosenProgramNr = -1,
+    .init_program_nr = 0,
+    .pcolony = &pcol,
+    .obj = {%s
+    },
+    .programs = (Program_t[%d]) {
+    """ % (
+        len(agent.programs),
+        writeMultisetObj(agent.obj, capacity),
+        len(agent.programs)
+    )
+
+    for program in agent.programs:
+        result +="""
+        {
+        %s
+        },""" % ("\n" + " " * 8).join(writeProgram(program).split("\n")) # indents programs by 8 spaces
+
+    result +="""
+    }"""
+
+    return result
+# end writeAgent()
+
+def writePcolony(pcol):
+    """Write P colony structure (Pcolony_t) from Pcolony object
+
+    :pcol: P colony object
+    :returns: String representation (in C) of the P colony"""
+
+    result = """
+Pcolony_t pcol = {
+    .nr_A = %d,
+    .nr_agents = %d,
+    .n = %d,
+    .env = {%s
+    },
+    """ % (
+        len(pcol.A),
+        len(pcol.agents),
+        pcol.n,
+        # env
+        ("\n" + " " * 4).join(writeMultisetEnv(pcol.env, len(pcol.A)).split("\n")),
+    )
+
+    if (pcol.parentSwarm == None):
+        result +="""
+    .pswarm = 0,
+    """
+    else:
+        result +="""
+    .pswarm = {
+        .global_env = {%s
+        },
+        .in_global_env = {%s
+        },
+        .out_global_env = {%s
+        },
+    },
+
+        """ % (
+            # global_env
+            ("\n" + " " * 8).join(writeMultisetEnv(pcol.parentSwarm.global_env, len(pcol.A)).split("\n")),
+            # in_global_env
+            ("\n" + " " * 8).join(writeMultisetEnv(pcol.parentSwarm.in_global_env, len(pcol.A)).split("\n")),
+            # out_global_env
+            ("\n" + " " * 8).join(writeMultisetEnv(pcol.parentSwarm.out_global_env, len(pcol.A)).split("\n")),
+        )
+    result += """.agents = (Agent_t[%d]) {
+    """ % len(pcol.agents)
+    for agentName, agent in pcol.agents.items():
+        result += """
+        [AGENT_%s] = {""" % agentName.upper()
+        result += ("\n" + " " * 8).join(writeAgent(agent, pcol.n).split("\n"))
+        result += """
+        },"""
+
+    result +="""
+    }"""
+    result +="""
+};"""
+
+    return result
+# end writePcolony()
+
 def createInstanceHeader(pcol, path, originalFilename, nr_robots):
     """Create an instance of the passed P colony that is written as a header in C at the given path
 
@@ -45,6 +242,7 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
 
         # sort objects naturally
         pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_W_ID', '/').replace('_W_ALL', '.'))
+        repr(pcol.A)
         for i, obj in enumerate(pcol.A):
             if (obj in ['e', 'f']):
                 continue; # they are already defined in lulu.h
@@ -98,6 +296,8 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
     extern char* objectNames[];
     extern char* agentNames[];
 #endif
+
+extern Pcolony_t pcol;
 
 /**
  * @brief The smallest kilo_uid from the swarm (is set in instance.c by lulu_c.py)
@@ -176,104 +376,107 @@ const uint16_t nr_swarm_robots = %d;
 
 void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
 
-        # call initPcolony()
-        fout.write("""\n    //init Pcolony with alphabet size = %d, nr of agents = %d, capacity = %d
-    initPcolony(pcol, %d, %d, %d);""" % (len(pcol.A), len(pcol.B), pcol.n,  len(pcol.A), len(pcol.B), pcol.n))
-        fout.write("""\n    //Pcolony.alphabet = %s""" % pcol.A)
+        ## call initPcolony()
+        #fout.write("""\n    //init Pcolony with alphabet size = %d, nr of agents = %d, capacity = %d
+    #initPcolony(pcol, %d, %d, %d);""" % (len(pcol.A), len(pcol.B), pcol.n,  len(pcol.A), len(pcol.B), pcol.n))
+        #fout.write("""\n    //Pcolony.alphabet = %s""" % pcol.A)
 
-        # init environment
-        fout.write("""\n\n    //init environment""")
-        counter = 0;
-        for obj, nr in pcol.env.items():
-            #replace %id and * with $id and $ respectively
+        ## init environment
+        #fout.write("""\n\n    //init environment""")
+        #counter = 0;
+        #for obj, nr in pcol.env.items():
+            ##replace %id and * with $id and $ respectively
 
-            fout.write("""\n        pcol->env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
-            fout.write("""\n        pcol->env.items[%d].nr = %d;\n""" % (counter, nr))
-            counter += 1
-        fout.write("""\n    //end init environment""")
+            #fout.write("""\n        pcol->env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+            #fout.write("""\n        pcol->env.items[%d].nr = %d;\n""" % (counter, nr))
+            #counter += 1
+        #fout.write("""\n    //end init environment""")
 
-        fout.write("""\n\n    //init global pswarm environment""")
-        if (pcol.parentSwarm == None or len(pcol.parentSwarm.global_env) == 0):
-            fout.write("""\n        pcol->pswarm.global_env.items[0].id = OBJECT_ID_E;""")
-            fout.write("""\n        pcol->pswarm.global_env.items[0].nr = 1;""")
-        else:
-            counter = 0
-            for obj, nr in pcol.parentSwarm.global_env.items():
-                #replace %id and * with $id and $ respectively
+        #fout.write("""\n\n    //init global pswarm environment""")
+        #if (pcol.parentSwarm == None or len(pcol.parentSwarm.global_env) == 0):
+            #fout.write("""\n        pcol->pswarm.global_env.items[0].id = OBJECT_ID_E;""")
+            #fout.write("""\n        pcol->pswarm.global_env.items[0].nr = 1;""")
+        #else:
+            #counter = 0
+            #for obj, nr in pcol.parentSwarm.global_env.items():
+                ##replace %id and * with $id and $ respectively
 
-                fout.write("""\n        pcol->pswarm.global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
-                fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
-                counter += 1
-        fout.write("""\n    //end init global pswarm environment""")
+                #fout.write("""\n        pcol->pswarm.global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                #fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
+                #counter += 1
+        #fout.write("""\n    //end init global pswarm environment""")
 
-        fout.write("""\n\n    //init INPUT global pswarm environment""")
-        if (pcol.parentSwarm == None or len(pcol.parentSwarm.in_global_env) == 0):
-            fout.write("""\n        pcol->pswarm.in_global_env.items[0].id = OBJECT_ID_E;""")
-            fout.write("""\n        pcol->pswarm.in_global_env.items[0].nr = 1;""")
-        else:
-            counter = 0
-            for obj, nr in pcol.parentSwarm.in_global_env.items():
-                #replace %id and * with $id and $ respectively
+        #fout.write("""\n\n    //init INPUT global pswarm environment""")
+        #if (pcol.parentSwarm == None or len(pcol.parentSwarm.in_global_env) == 0):
+            #fout.write("""\n        pcol->pswarm.in_global_env.items[0].id = OBJECT_ID_E;""")
+            #fout.write("""\n        pcol->pswarm.in_global_env.items[0].nr = 1;""")
+        #else:
+            #counter = 0
+            #for obj, nr in pcol.parentSwarm.in_global_env.items():
+                ##replace %id and * with $id and $ respectively
 
-                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
-                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].nr = %d;""" % (counter, nr))
-                counter += 1
-        fout.write("""\n    //end init INPUT global pswarm environment""")
+                #fout.write("""\n        pcol->pswarm.in_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                #fout.write("""\n        pcol->pswarm.in_global_env.items[%d].nr = %d;""" % (counter, nr))
+                #counter += 1
+        #fout.write("""\n    //end init INPUT global pswarm environment""")
 
-        fout.write("""\n\n    //init OUTPUT global pswarm environment""")
-        if (pcol.parentSwarm == None or len(pcol.parentSwarm.out_global_env) == 0):
-            fout.write("""\n        pcol->pswarm.out_global_env.items[0].id = OBJECT_ID_E;""")
-            fout.write("""\n        pcol->pswarm.out_global_env.items[0].nr = 1;""")
-        else:
-            counter = 0
-            for obj, nr in pcol.parentSwarm.out_global_env.items():
-                #replace %id and * with $id and $ respectively
+        #fout.write("""\n\n    //init OUTPUT global pswarm environment""")
+        #if (pcol.parentSwarm == None or len(pcol.parentSwarm.out_global_env) == 0):
+            #fout.write("""\n        pcol->pswarm.out_global_env.items[0].id = OBJECT_ID_E;""")
+            #fout.write("""\n        pcol->pswarm.out_global_env.items[0].nr = 1;""")
+        #else:
+            #counter = 0
+            #for obj, nr in pcol.parentSwarm.out_global_env.items():
+                ##replace %id and * with $id and $ respectively
 
-                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
-                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].nr = %d;""" % (counter, nr))
-                counter += 1
-        fout.write("""\n    //end init OUTPUT global pswarm environment""")
+                #fout.write("""\n        pcol->pswarm.out_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                #fout.write("""\n        pcol->pswarm.out_global_env.items[%d].nr = %d;""" % (counter, nr))
+                #counter += 1
+        #fout.write("""\n    //end init OUTPUT global pswarm environment""")
 
-        for ag_name in pcol.B:
-            fout.write("""\n\n    //init agent %s""" % ag_name)
-            #fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), len(pcol.agents[ag_name].programs)))
-            fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), getNrOfProgramsAfterExpansion(pcol.agents[ag_name], nr_robots- 1)))
+        #for ag_name in pcol.B:
+            #fout.write("""\n\n    //init agent %s""" % ag_name)
+            ##fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), len(pcol.agents[ag_name].programs)))
+            #fout.write("""\n\n    initAgent(&pcol->agents[AGENT_%s], pcol, %d);""" % (ag_name.upper(), getNrOfProgramsAfterExpansion(pcol.agents[ag_name], nr_robots- 1)))
 
-            fout.write("""\n        //init obj multiset""")
-            counter = 0;
-            for obj, nr in pcol.agents[ag_name].obj.items():
-                #replace %id and * with $id and $ respectively
+            #fout.write("""\n        //init obj multiset""")
+            #counter = 0;
+            #for obj, nr in pcol.agents[ag_name].obj.items():
+                ##replace %id and * with $id and $ respectively
 
-                for i in range(nr):
-                    fout.write("""\n        pcol->agents[AGENT_%s].obj.items[%d] = OBJECT_ID_%s;""" % (ag_name.upper(), counter, obj.upper()))
-                    counter += 1
+                #for i in range(nr):
+                    #fout.write("""\n        pcol->agents[AGENT_%s].obj.items[%d] = OBJECT_ID_%s;""" % (ag_name.upper(), counter, obj.upper()))
+                    #counter += 1
 
-            fout.write("""\n\n        //init programs""")
-            for prg_nr, prg in enumerate(pcol.agents[ag_name].programs):
-                fout.write("""\n\n            initProgram(&pcol->agents[AGENT_%s].programs[%d], %d);""" % (ag_name.upper(), prg_nr, getNrOfRulesWithoutRepetitions(prg)))
-                fout.write("""\n            //init program %d: < %s >""" % (prg_nr, prg.print()))
+            #fout.write("""\n\n        //init programs""")
+            #for prg_nr, prg in enumerate(pcol.agents[ag_name].programs):
+                #fout.write("""\n\n            initProgram(&pcol->agents[AGENT_%s].programs[%d], %d);""" % (ag_name.upper(), prg_nr, getNrOfRulesWithoutRepetitions(prg)))
+                #fout.write("""\n            //init program %d: < %s >""" % (prg_nr, prg.print()))
 
-                rule_index = 0
-                for rule_nr, rule in enumerate(prg):
-                    # skip rules that contain identical operands and thus have no effect
-                    if (rule.lhs == rule.rhs and rule.lhs == 'e' and rule.main_type != sim.RuleType.conditional):
-                        continue
+                #rule_index = 0
+                #for rule_nr, rule in enumerate(prg):
+                    ## skip rules that contain identical operands and thus have no effect
+                    #if (rule.lhs == rule.rhs and rule.lhs == 'e' and rule.main_type != sim.RuleType.conditional):
+                        #continue
 
-                    fout.write("""\n                //init rule %d: %s""" % (rule_nr, rule.print(toString=True)) )
-                    if (rule.main_type != sim.RuleType.conditional):
-                        fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_%s, OBJECT_ID_%s, OBJECT_ID_%s, NO_OBJECT, NO_OBJECT);""" % (ag_name.upper(), prg_nr, rule_index, rule.type.name.upper(), rule.lhs.upper(), rule.rhs.upper()))
-                    else:
-                        fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_CONDITIONAL_%s_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s);""" % (ag_name.upper(), prg_nr, rule_index, rule.type.name.upper(), rule.alt_type.name.upper(), rule.lhs.upper(), rule.rhs.upper(), rule.alt_lhs.upper(), rule.alt_rhs.upper()))
+                    #fout.write("""\n                //init rule %d: %s""" % (rule_nr, rule.print(toString=True)) )
+                    #if (rule.main_type != sim.RuleType.conditional):
+                        #fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_%s, OBJECT_ID_%s, OBJECT_ID_%s, NO_OBJECT, NO_OBJECT);""" % (ag_name.upper(), prg_nr, rule_index, rule.type.name.upper(), rule.lhs.upper(), rule.rhs.upper()))
+                    #else:
+                        #fout.write("""\n                initRule(&pcol->agents[AGENT_%s].programs[%d].rules[%d], RULE_TYPE_CONDITIONAL_%s_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s, OBJECT_ID_%s);""" % (ag_name.upper(), prg_nr, rule_index, rule.type.name.upper(), rule.alt_type.name.upper(), rule.lhs.upper(), rule.rhs.upper(), rule.alt_lhs.upper(), rule.alt_rhs.upper()))
 
-                    #increase rule_index
-                    rule_index += 1
-                fout.write("""\n            //end init program %d
-            pcol->agents[AGENT_%s].init_program_nr++;""" % (prg_nr, ag_name.upper()))
-            fout.write("""\n        //end init programs""")
+                    ##increase rule_index
+                    #rule_index += 1
+                #fout.write("""\n            //end init program %d
+            #pcol->agents[AGENT_%s].init_program_nr++;""" % (prg_nr, ag_name.upper()))
+            #fout.write("""\n        //end init programs""")
 
-            fout.write("""\n    //end init agent %s""" % ag_name)
+            #fout.write("""\n    //end init agent %s""" % ag_name)
 
         fout.write("""\n}""")
+
+        fout.write(writePcolony(pcol))
+
         fout.write("""\n\nvoid lulu_destroy(Pcolony_t *pcol) {
     //destroys all of the subcomponents
     destroyPcolony(pcol);
