@@ -58,7 +58,6 @@ def writeRule(rule):
     if (rule.main_type != sim.RuleType.conditional):
         result = """
             .type = %s,
-            .exec_rule_nr = RULE_EXEC_OPTION_NONE,
             .lhs = OBJECT_ID_%s,
             .rhs = OBJECT_ID_%s,
             .alt_lhs = NO_OBJECT,
@@ -70,7 +69,6 @@ def writeRule(rule):
     else:
         result = """
             .type = %s,
-            .exec_rule_nr = RULE_EXEC_OPTION_NONE,
             .lhs = OBJECT_ID_%s,
             .rhs = OBJECT_ID_%s,
             .alt_lhs = OBJECT_ID_%s,
@@ -94,8 +92,17 @@ def writeProgram(program):
     result = """
     /* %s */
     .nr_rules = %d,
-    .rules = (Rule_t[%d]) {
+    .exec_rule_numbers = (rule_exec_option_t [%d]) {
     """ % (program.print(), len(program), len(program))
+    for i in range(len(program)):
+        result +="""
+        RULE_EXEC_OPTION_NONE,
+        """
+
+    result += """
+    },
+    .rules = (const Rule_t[%d]) {
+    """ % len(program)
 
     for rule in program:
         result +="""
