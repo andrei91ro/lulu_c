@@ -33,18 +33,18 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
         # extend wildcard objects to _0, _1, ... _n where n = nr_robots
         for a in pcol.A[:]:
             # both $ and $id wildcards need extended objects
-            if ("_$" in a or "_$id" in a):
+            if ("_W_ALL" in a or "_W_ID" in a):
                 needsWildcardExpansion = True
                 logging.debug("Extending %s wildcarded object" % a)
                 # construct extended object list
-                extension = [a.replace("$id", "%d" % i).replace("$", "%d" % i) for i in range(nr_robots)]
+                extension = [a.replace("W_ID", "%d" % i).replace("W_ALL", "%d" % i) for i in range(nr_robots)]
                 # if this extension has not been previously added
                 if (not set(extension).issubset(set(pcol.A))):
                     #add the extetendet object list to the alphabet
                     pcol.A.extend(extension)
 
         # sort objects naturally
-        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_$', '/') + '-')
+        pcol.A = natsort.natsorted(pcol.A, key=lambda x: x.replace('_W_ID', '/').replace('_W_ALL', '.'))
         for i, obj in enumerate(pcol.A):
             if (obj in ['e', 'f']):
                 continue; # they are already defined in lulu.h
@@ -79,6 +79,19 @@ def createInstanceHeader(pcol, path, originalFilename, nr_robots):
             fout.write("""\n#define USING_OBJECT_D_ALL //this ensures that the code associated with processing D_ALL objects is included in Lulu_kilobot""")
         if ("d_next" in pcol.A):
             fout.write("""\n#define USING_OBJECT_D_NEXT //this ensures that the code associated with processing D_NEXT objects is included in Lulu_kilobot""")
+
+        # check if using {IN,OUT}_EXTEROCEPTIVE rules (<I=> or <=O>)
+        using_in_out_exteroceptive_rules = False
+        for agent in pcol.agents.values():
+            for program in agent.programs:
+                for rule in program:
+                    if (rule.type == sim.RuleType.in_exteroceptive or rule.type == sim.RuleType.out_exteroceptive or
+                            rule.alt_type == sim.RuleType.in_exteroceptive or rule.alt_type == sim.RuleType.out_exteroceptive):
+                        using_in_out_exteroceptive_rules = True
+                        break;
+        if (using_in_out_exteroceptive_rules):
+            fout.write("""\n#define USING_IN_OUT_EXTEROCEPTIVE_RULES //this ensures that the code associated with processing IN_EXTEROCEPTIVE (<I=>) or OUT_EXTEROCEPTIVE (<=O>) rules is included in Lulu_kilobot""")
+
         fout.write("""\n\n//if building Pcolony simulator for PC
 #ifdef PCOL_SIM
     //define array of names for objects and agents for debug
@@ -113,7 +126,7 @@ void lulu_destroy(Pcolony_t *pcol);
 #ifdef NEEDING_WILDCARD_EXPANSION
     /**
      * @brief Expands and replaces wildcarded objects with the appropriate objects
-     * Objects that end with _$ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
+     * Objects that end with _W_ID are replaced with _i where i is the the id of the robot, provided with my_id parameter
      *
      * @param pcol The pcolony where the replacements will take place
      * @param my_id The kilo_uid of the robot
@@ -173,7 +186,6 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
         counter = 0;
         for obj, nr in pcol.env.items():
             #replace %id and * with $id and $ respectively
-            obj = obj.replace("%", "$").replace("*", "$")
 
             fout.write("""\n        pcol->env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
             fout.write("""\n        pcol->env.items[%d].nr = %d;\n""" % (counter, nr))
@@ -188,12 +200,39 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
             counter = 0
             for obj, nr in pcol.parentSwarm.global_env.items():
                 #replace %id and * with $id and $ respectively
-                obj = obj.replace("%", "$").replace("*", "$")
 
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
                 fout.write("""\n        pcol->pswarm.global_env.items[%d].nr = %d;""" % (counter, nr))
                 counter += 1
         fout.write("""\n    //end init global pswarm environment""")
+
+        fout.write("""\n\n    //init INPUT global pswarm environment""")
+        if (pcol.parentSwarm == None or len(pcol.parentSwarm.in_global_env) == 0):
+            fout.write("""\n        pcol->pswarm.in_global_env.items[0].id = OBJECT_ID_E;""")
+            fout.write("""\n        pcol->pswarm.in_global_env.items[0].nr = 1;""")
+        else:
+            counter = 0
+            for obj, nr in pcol.parentSwarm.in_global_env.items():
+                #replace %id and * with $id and $ respectively
+
+                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                fout.write("""\n        pcol->pswarm.in_global_env.items[%d].nr = %d;""" % (counter, nr))
+                counter += 1
+        fout.write("""\n    //end init INPUT global pswarm environment""")
+
+        fout.write("""\n\n    //init OUTPUT global pswarm environment""")
+        if (pcol.parentSwarm == None or len(pcol.parentSwarm.out_global_env) == 0):
+            fout.write("""\n        pcol->pswarm.out_global_env.items[0].id = OBJECT_ID_E;""")
+            fout.write("""\n        pcol->pswarm.out_global_env.items[0].nr = 1;""")
+        else:
+            counter = 0
+            for obj, nr in pcol.parentSwarm.out_global_env.items():
+                #replace %id and * with $id and $ respectively
+
+                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].id = OBJECT_ID_%s;""" % (counter, obj.upper()))
+                fout.write("""\n        pcol->pswarm.out_global_env.items[%d].nr = %d;""" % (counter, nr))
+                counter += 1
+        fout.write("""\n    //end init OUTPUT global pswarm environment""")
 
         for ag_name in pcol.B:
             fout.write("""\n\n    //init agent %s""" % ag_name)
@@ -204,7 +243,6 @@ void lulu_init(Pcolony_t *pcol) {""" % (smallest_robot_id, nr_robots) )
             counter = 0;
             for obj, nr in pcol.agents[ag_name].obj.items():
                 #replace %id and * with $id and $ respectively
-                obj = obj.replace("%", "$").replace("*", "$")
 
                 for i in range(nr):
                     fout.write("""\n        pcol->agents[AGENT_%s].obj.items[%d] = OBJECT_ID_%s;""" % (ag_name.upper(), counter, obj.upper()))
@@ -251,7 +289,7 @@ uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
         fout.write("""\n    uint8_t obj_with_id[] = {""")
         obj_with_id_size = 0
         for obj in pcol.A:
-            if ("_$id" in obj):
+            if ("_W_ID" in obj):
                 fout.write("OBJECT_ID_%s, " % obj.upper())
                 obj_with_id_size += 1
         fout.write("""};
@@ -261,12 +299,12 @@ uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
         obj_with_any_size = 0
         is_obj_with_any_followed_by_id = []
         for i, obj in enumerate(pcol.A):
-            if (obj.endswith("_$")):
+            if (obj.endswith("_W_ALL")):
                 fout.write("OBJECT_ID_%s, " % obj.upper())
                 # if we are at least 2 objects before the end of the list
                 if (i < len(pcol.A) - 1):
                     # check if this _$ wildcarded object is followed by a _$id object
-                    if ("_$id" in pcol.A[i+1]):
+                    if ("_W_ID" in pcol.A[i+1]):
                         is_obj_with_any_followed_by_id.append(1)
                     else:
                         is_obj_with_any_followed_by_id.append(0)
@@ -281,12 +319,12 @@ uint16_t expand_pcolony(Pcolony_t *pcol, uint16_t my_id) {
 
         fout.write("""\n\n    uint16_t my_symbolic_id = my_id - smallest_robot_uid;
 
-    //replace $ID wildcarded objects with the object corresponding to the symbolic id
-    //  e.g.: B_$ID -> B_0 for my_symbolic_id = 0
+    //replace W_ID wildcarded objects with the object corresponding to the symbolic id
+    //  e.g.: B_W_ID -> B_0 for my_symbolic_id = 0
     replacePcolonyWildID(pcol, obj_with_id, obj_with_id_size, my_symbolic_id);
 
     //expand each obj_with_any[] element into nr_swarm_robots objects except my_symbolic id.
-    //  e.g.: B_$ -> B_0, B_2 for nr_swarm_robots = 3 and my_symbolic_id = 1
+    //  e.g.: B_W_ALL -> B_0, B_2 for nr_swarm_robots = 3 and my_symbolic_id = 1
     expandPcolonyWildAny(pcol, obj_with_any, is_obj_with_any_followed_by_id, obj_with_any_size, my_symbolic_id, nr_swarm_robots);
 
     return my_symbolic_id;
@@ -304,7 +342,7 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
     if suffixListSize = 2 then we obtain 2 new programs, < X_0 - > e ... > and < X_1 -> e ...> that replace the original one
     :returns: The final number of programs that will result after expansion """
 
-    check_for_any_wild = [x.endswith("_$") for x in agent.colony.A]
+    check_for_any_wild = [x.endswith("_W_ALL") for x in agent.colony.A]
     any_wild_objects = []
     for i, val in enumerate(check_for_any_wild):
         if (val):
@@ -312,12 +350,15 @@ def getNrOfProgramsAfterExpansion(agent, suffixListSize):
 
     counter = 0
 
+    logging.info("wild_ANY objects = %s" % any_wild_objects)
+
     for program in agent.programs:
         wild_exists_in_program = False
         for rule in program:
             for obj in any_wild_objects:
-                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or rule.alt_rhs):
+                if (obj == rule.lhs or obj == rule.rhs or obj == rule.alt_lhs or obj == rule.alt_rhs):
                     wild_exists_in_program = True
+                    logging.warning("wild_ANY object %s exists in program %s rule %s" % (obj, program.print(), rule.print(toString=True)))
                     break;
         # end for rule in program
         if (wild_exists_in_program):
@@ -414,13 +455,13 @@ if (__name__ == "__main__"):
     #replacing wildcarded marks * and %id with $ and $id respectively
     #in alphabet, all multisets and programs
     for i, val in enumerate(pcol.A):
-        pcol.A[i] = val.replace("%", "$").replace("*", "$")
+        pcol.A[i] = val.replace("%id", "W_ID").replace("*", "W_ALL")
 
     for key in pcol.env:
         # if key contains wildcards
         if ("*" in key or "%id" in key):
             #copy value at wildcarded key at new $ key
-            pcol.env[key.replace("%", "$").replace("*", "$")] = pcol.env[key];
+            pcol.env[key.replace("%id", "W_ID").replace("*", "W_ALL")] = pcol.env[key];
             #delete the * key
             del pcol.env[key]
 
@@ -430,7 +471,7 @@ if (__name__ == "__main__"):
             # if key contains wildcards
             if ("*" in key or "%id" in key):
                 #copy value at wildcarded key at new $ key
-                pcol.parentSwarm.global_env[key.replace("%", "$").replace("*", "$")] = pcol.parentSwarm.global_env[key];
+                pcol.parentSwarm.global_env[key.replace("%id", "W_ID").replace("*", "W_ALL")] = pcol.parentSwarm.global_env[key];
                 #delete the * key
                 del pcol.parentSwarm.global_env[key]
 
@@ -439,16 +480,16 @@ if (__name__ == "__main__"):
             # if key contains wildcards
             if ("*" in key or "%id" in key):
                 #copy value at wildcarded key at new $ key
-                pcol.agents[ag_name].obj[key.replace("%", "$").replace("*", "$")] = pcol.agents[ag_name].obj[key];
+                pcol.agents[ag_name].obj[key.replace("%id", "W_ID").replace("*", "W_ALL")] = pcol.agents[ag_name].obj[key];
                 #delete the * key
                 del pcol.agents[ag_name].obj[key]
         # end for key in obj
         for prg_nr, prg in enumerate(pcol.agents[ag_name].programs):
             for rule_nr, rule in enumerate(prg):
-                rule.lhs = rule.lhs.replace("%", "$").replace("*", "$")
-                rule.rhs = rule.rhs.replace("%", "$").replace("*", "$")
-                rule.alt_lhs = rule.alt_lhs.replace("%", "$").replace("*", "$")
-                rule.alt_rhs = rule.alt_rhs.replace("%", "$").replace("*", "$")
+                rule.lhs = rule.lhs.replace("%id", "W_ID").replace("*", "W_ALL")
+                rule.rhs = rule.rhs.replace("%id", "W_ID").replace("*", "W_ALL")
+                rule.alt_lhs = rule.alt_lhs.replace("%id", "W_ID").replace("*", "W_ALL")
+                rule.alt_rhs = rule.alt_rhs.replace("%id", "W_ID").replace("*", "W_ALL")
 
     logging.info("Generating the instance header (%s)" % (path + ".h"))
     createInstanceHeader(pcol, path + ".h", sys.argv[1].split("/")[-1], nr_robots)
