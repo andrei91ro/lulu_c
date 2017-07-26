@@ -1,5 +1,4 @@
 import logging
-import colorlog # colors log output
 from lulu_pcol_sim import sim
 import sys # for argv
 import time # for strftime()
@@ -383,28 +382,36 @@ def getNrOfRulesWithoutRepetitions(prg):
 
 #   MAIN
 if (__name__ == "__main__"):
+    logLevel = logging.INFO
 
-    formatter = colorlog.ColoredFormatter(
-            "%(log_color)s%(levelname)-8s %(message)s %(reset)s",
-            datefmt=None,
-            reset=True,
-            log_colors={
-                    'DEBUG':    'cyan',
-                    'INFO':     'green',
-                    'WARNING':  'yellow',
-                    'ERROR':    'red',
-                    'CRITICAL': 'red,bg_white',
-            },
-            secondary_log_colors={},
-            style='%'
-    )
     if ('--debug' in sys.argv):
-        colorlog.basicConfig(stream = sys.stdout, level = logging.DEBUG)
-    else:
-        colorlog.basicConfig(stream = sys.stdout, level = logging.INFO) # default log level
-    stream = colorlog.root.handlers[0]
-    stream.setFormatter(formatter);
+        logLevel = logging.DEBUG
 
+    try:
+        import colorlog # colors log output
+
+        formatter = colorlog.ColoredFormatter(
+                "%(log_color)s%(levelname)-8s %(message)s %(reset)s",
+                datefmt=None,
+                reset=True,
+                log_colors={
+                        'DEBUG':    'cyan',
+                        'INFO':     'green',
+                        'WARNING':  'yellow',
+                        'ERROR':    'red',
+                        'CRITICAL': 'red,bg_white',
+                },
+                secondary_log_colors={},
+                style='%'
+        )
+
+        colorlog.basicConfig(stream = sys.stdout, level = logLevel)
+        stream = colorlog.root.handlers[0]
+        stream.setFormatter(formatter);
+
+    # colorlog not available
+    except ImportError:
+        logging.basicConfig(format='%(levelname)s:%(message)s', level = logLevel)
     if (len(sys.argv) < 2):
         logging.error("Expected input file path as parameter")
         exit(1)
