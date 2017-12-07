@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import logging
 from lulu_pcol_sim import sim
 import sys # for argv
